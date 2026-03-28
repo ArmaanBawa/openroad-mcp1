@@ -1,6 +1,7 @@
 """Performance benchmark tests for interactive shell functionality."""
 
 import asyncio
+import math
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -88,17 +89,19 @@ class TestPerformanceBenchmarks:
         assert duration < 5.0, f"Streaming took {duration:.3f}s (>5s timeout)"
 
     async def test_concurrent_session_scalability(self, benchmark_timeout):
-        """Test concurrent session scalability."""
+        """Test concurrent session scalability with 50+ sessions using real PTY calls."""
         session_manager = SessionManager()
+        original_max = session_manager._max_sessions
+        session_manager._max_sessions = 60
 
         try:
-            # TICKET-020 requirement: Support 20+ concurrent sessions
-            concurrent_sessions = 25
+            # GSoC Phase 1 target: 50+ concurrent sessions
+            concurrent_sessions = 50
             session_ids = []
 
             start_time = time.perf_counter()
 
-            # Create sessions concurrently
+            # Create sessions concurrently using real openroad PTY calls
             async def create_session_with_delay():
                 await asyncio.sleep(0.001)  # Small delay to simulate real usage
                 return await session_manager.create_session()
@@ -113,43 +116,54 @@ class TestPerformanceBenchmarks:
             print(f"  Duration: {creation_time:.3f}s")
             print(f"  Rate: {len(session_ids) / creation_time:.1f} sessions/sec")
 
-            # Verify all sessions created successfully
+            # Verify all sessions created successfully with unique IDs (no cross-pollution)
             assert len(session_ids) == concurrent_sessions
-            assert len(set(session_ids)) == concurrent_sessions  # All unique
+            assert len(set(session_ids)) == concurrent_sessions
 
             # Performance assertions
-            assert creation_time < 5.0, f"Concurrent creation took {creation_time:.3f}s (>5s)"
+            assert creation_time < 10.0, f"Concurrent creation took {creation_time:.3f}s (>10s)"
 
-            # Test concurrent operations
-            start_time = time.perf_counter()
+            # Test concurrent command execution via real PTY with per-command latency tracking
+            command_latencies = []
 
-            with (
-                patch("openroad_mcp.interactive.session.InteractiveSession.send_command"),
-                patch("openroad_mcp.interactive.session.InteractiveSession.read_output") as mock_read,
-            ):
-                mock_read.return_value = AsyncMock()
-                mock_read.return_value.output = "test output"
-                mock_read.return_value.execution_time = 0.01
+            async def execute_with_latency(sid):
+                t0 = time.perf_counter()
+                result = await session_manager.execute_command(sid, "echo hello")
+                latency = time.perf_counter() - t0
+                command_latencies.append(latency)
+                return sid, result
 
-                # Execute commands concurrently
-                tasks = []
-                for session_id in session_ids:
-                    task = session_manager.execute_command(session_id, "test command")
-                    tasks.append(task)
+            tasks = [execute_with_latency(sid) for sid in session_ids]
+            results = await asyncio.gather(*tasks)
 
-                await asyncio.gather(*tasks)
+            # Verify output content and session binding (no cross-pollution)
+            for sid, result in results:
+                assert result is not None, f"Session {sid} returned no result"
+                output = result.output if hasattr(result, "output") else str(result)
+                assert "hello" in output, f"Session {sid} output missing 'hello': {output!r}"
 
-            execution_time = time.perf_counter() - start_time
+            # Calculate p99, p95, mean latency
+            if not command_latencies:
+                pytest.skip("No latency samples collected — skipping percentile assertions")
+            sorted_latencies = sorted(command_latencies)
+            n = len(sorted_latencies)
+            mean_latency = sum(command_latencies) / n
+            p95_latency = sorted_latencies[max(0, min(n - 1, math.ceil(0.95 * n) - 1))]
+            p99_latency = sorted_latencies[max(0, min(n - 1, math.ceil(0.99 * n) - 1))]
 
-            print("Concurrent Command Execution:")
-            print(f"  Commands: {len(session_ids)}")
-            print(f"  Duration: {execution_time:.3f}s")
-            print(f"  Rate: {len(session_ids) / execution_time:.1f} commands/sec")
+            print("Concurrent Command Execution (50 sessions):")
+            print(f"  Commands: {len(command_latencies)}")
+            print(f"  Mean latency: {mean_latency * 1000:.2f}ms")
+            print(f"  p95 latency:  {p95_latency * 1000:.2f}ms")
+            print(f"  p99 latency:  {p99_latency * 1000:.2f}ms")
 
-            # Performance assertions
-            assert execution_time < 2.0, f"Concurrent execution took {execution_time:.3f}s (>2s)"
+            # Latency assertions under 50-session concurrency
+            assert mean_latency < 1.0, f"Mean latency {mean_latency * 1000:.2f}ms exceeds 1000ms"
+            assert p95_latency < 2.0, f"p95 latency {p95_latency * 1000:.2f}ms exceeds 2000ms"
+            assert p99_latency < 3.0, f"p99 latency {p99_latency * 1000:.2f}ms exceeds 3000ms"
 
         finally:
+            session_manager._max_sessions = original_max
             await session_manager.cleanup_all()
 
     async def test_memory_usage_profiling(self, benchmark_timeout):
