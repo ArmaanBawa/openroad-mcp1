@@ -2,7 +2,6 @@
 
 import asyncio
 import math
-import os
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -119,7 +118,7 @@ class TestPerformanceBenchmarks:
 
             # Verify all sessions created successfully with unique IDs (no cross-pollution)
             assert len(session_ids) == concurrent_sessions
-            assert len(set(session_ids)) == concurrent_sessions
+            assert len(set(session_ids)) == concurrent_sessions  # All unique IDs, no cross-pollution
 
             # Performance assertions
             assert creation_time < 10.0, f"Concurrent creation took {creation_time:.3f}s (>10s)"
