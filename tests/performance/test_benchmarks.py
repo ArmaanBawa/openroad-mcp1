@@ -124,15 +124,19 @@ class TestPerformanceBenchmarks:
             # Performance assertions
             assert creation_time < 10.0, f"Concurrent creation took {creation_time:.3f}s (>10s)"
 
-            # Drain startup banner from all sessions before testing command execution.
-            # Each OpenROAD session emits a version/license banner on startup that would
-            # pollute the first read_output() call if not consumed beforehand.
-            async def drain_banner(sid):
-                session = session_manager._sessions[sid]
-                await asyncio.sleep(0.5)  # Allow banner to arrive
-                await session.output_buffer.drain_all()
+            # Consume the startup banner from each session by repeatedly sending a
+            # sentinel command until its output is confirmed. The first call may return
+            # only the banner (already buffered before the command runs); retrying
+            # guarantees the banner is fully drained before the real test commands run.
+            async def wait_for_ready(sid):
+                for _ in range(10):
+                    result = await session_manager.execute_command(sid, "puts __ready__")
+                    output = result.output if hasattr(result, "output") else str(result)
+                    if "__ready__" in output:
+                        return
+                raise AssertionError(f"Session {sid} did not reach ready state after retries")
 
-            await asyncio.gather(*[drain_banner(sid) for sid in session_ids])
+            await asyncio.gather(*[wait_for_ready(sid) for sid in session_ids])
 
             # Test concurrent command execution via real PTY with per-command latency tracking
             command_latencies = []
