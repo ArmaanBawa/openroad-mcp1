@@ -130,9 +130,7 @@ async def test_http_tool_call(http_mcp_client: ClientSession) -> None:
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_both_transports_in_parallel(
-    stdio_mcp_client: ClientSession, http_mcp_client: ClientSession
-) -> None:
+async def test_both_transports_in_parallel(stdio_mcp_client: ClientSession, http_mcp_client: ClientSession) -> None:
     """Run tool listing on both transports simultaneously."""
     stdio_result, http_result = await asyncio.gather(
         stdio_mcp_client.list_tools(),
@@ -142,14 +140,13 @@ async def test_both_transports_in_parallel(
     assert len(http_result.tools) > 0
     stdio_names = {t.name for t in stdio_result.tools}
     http_names = {t.name for t in http_result.tools}
-    assert stdio_names == http_names, (
-        f"Tool mismatch between transports: stdio={stdio_names}, http={http_names}"
-    )
+    assert stdio_names == http_names, f"Tool mismatch between transports: stdio={stdio_names}, http={http_names}"
 
 
 # ---------------------------------------------------------------------------
 # Secondary: MCP Inspector CLI verification
 # ---------------------------------------------------------------------------
+
 
 def _run_inspector_cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     """Run MCP Inspector CLI and return the completed process."""
@@ -165,8 +162,11 @@ def _run_inspector_cli(*args: str, timeout: int = 120) -> subprocess.CompletedPr
 def test_inspector_cli_tools_list() -> None:
     """Use Inspector CLI to verify tool list is returned (tool compatibility check)."""
     result = _run_inspector_cli(
-        "--method", "tools/list",
-        "uv", "run", "openroad-mcp",
+        "--method",
+        "tools/list",
+        "uv",
+        "run",
+        "openroad-mcp",
     )
     assert result.returncode == 0, f"Inspector CLI failed:\n{result.stderr}"
     data = json.loads(result.stdout)
@@ -180,9 +180,13 @@ def test_inspector_cli_tools_list() -> None:
 def test_inspector_cli_tool_call() -> None:
     """Use Inspector CLI to call list_interactive_sessions and verify response."""
     result = _run_inspector_cli(
-        "--method", "tools/call",
-        "--tool-name", "list_interactive_sessions",
-        "uv", "run", "openroad-mcp",
+        "--method",
+        "tools/call",
+        "--tool-name",
+        "list_interactive_sessions",
+        "uv",
+        "run",
+        "openroad-mcp",
     )
     assert result.returncode == 0, f"Inspector CLI tool call failed:\n{result.stderr}"
     data = json.loads(result.stdout)
