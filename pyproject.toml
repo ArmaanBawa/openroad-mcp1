@@ -83,4 +83,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "e2e: end-to-end tests using Playwright + MCP Inspector (require npx and chromium)",
+    "anyio: run async tests under anyio (used for MCP SDK e2e tests to avoid cancel-scope task boundary issues)",
 ]

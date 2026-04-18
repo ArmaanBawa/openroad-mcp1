@@ -17,7 +17,6 @@ import subprocess
 import time
 
 import pytest
-import pytest_asyncio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
@@ -40,7 +39,7 @@ def _wait_for_port(host: str, port: int, timeout: float = SERVER_STARTUP_TIMEOUT
     return False
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def stdio_mcp_client():
     """MCP client session using stdio transport."""
     server_params = StdioServerParameters(
@@ -81,7 +80,7 @@ def http_mcp_server():
         proc.kill()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest.fixture(scope="function")
 async def http_mcp_client(http_mcp_server):
     """MCP client session using HTTP (streamable) transport."""
     async with streamablehttp_client(f"http://localhost:{MCP_HTTP_PORT}/mcp") as (read, write, _):
@@ -91,7 +90,7 @@ async def http_mcp_client(http_mcp_server):
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stdio_tools_listed(stdio_mcp_client: ClientSession) -> None:
     """Verify tools are returned over stdio transport."""
     result = await stdio_mcp_client.list_tools()
@@ -101,7 +100,7 @@ async def test_stdio_tools_listed(stdio_mcp_client: ClientSession) -> None:
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_stdio_tool_call(stdio_mcp_client: ClientSession) -> None:
     """Call list_interactive_sessions over stdio and verify response schema."""
     result = await stdio_mcp_client.call_tool("list_interactive_sessions", {})
@@ -110,7 +109,7 @@ async def test_stdio_tool_call(stdio_mcp_client: ClientSession) -> None:
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_http_tools_listed(http_mcp_client: ClientSession) -> None:
     """Verify tools are returned over HTTP transport."""
     result = await http_mcp_client.list_tools()
@@ -120,7 +119,7 @@ async def test_http_tools_listed(http_mcp_client: ClientSession) -> None:
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_http_tool_call(http_mcp_client: ClientSession) -> None:
     """Call list_interactive_sessions over HTTP and verify response schema."""
     result = await http_mcp_client.call_tool("list_interactive_sessions", {})
@@ -129,7 +128,7 @@ async def test_http_tool_call(http_mcp_client: ClientSession) -> None:
 
 
 @pytest.mark.e2e
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_both_transports_in_parallel(stdio_mcp_client: ClientSession, http_mcp_client: ClientSession) -> None:
     """Run tool listing on both transports simultaneously."""
     stdio_result, http_result = await asyncio.gather(
